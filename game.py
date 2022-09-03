@@ -11,24 +11,44 @@ FRIC = -0.12
 FPS = 30
 
 class Player(pygame.sprite.Sprite):
+
+    PLAYER_MOVE_DIST = 10
+
     def __init__(self):
         super().__init__()
         self.image = pygame.image.load("panda.png")
         self.rect = self.image.get_rect()
         self.rect.center = (random.randint(40, WIDTH-40), 0)
-        self.pos = vec((10, 385))
+        self.pos = pygame.math.Vector2((10, 385))
+        self.prev_pos = pygame.math.Vector2(self.pos)
 
     def move(self):
         pressed_keys = pygame.key.get_pressed()
+        update = None
+        new_pos = pygame.math.Vector2(self.pos)
         if pressed_keys[K_LEFT]:
-            self.pos -= ((self.rect.width/2, 0))
+            update = True
+            new_pos -= ((Player.PLAYER_MOVE_DIST, 0))
         if pressed_keys[K_RIGHT]:
-            self.pos += ((self.rect.width/2, 0))
+            update = True
+            new_pos += ((Player.PLAYER_MOVE_DIST, 0))
         if pressed_keys[K_UP]:
-            self.pos -= ((0, self.rect.width/2))
+            update = True
+            new_pos -= ((0, Player.PLAYER_MOVE_DIST))
         if pressed_keys[K_DOWN]:
-            self.pos += ((0, self.rect.width/2))
+            update = True
+            new_pos += ((0, Player.PLAYER_MOVE_DIST))
 
+        if update:
+            print(f"Moving {self.pos} --> {new_pos}")
+            self.prev_pos = self.pos
+            self.pos = new_pos
+            self.rect.midbottom = self.pos
+        del new_pos
+
+    def undo_move(self):
+        print(f"Undo move {self.pos} --> {self.prev_pos}")
+        self.pos = self.prev_pos
         self.rect.midbottom = self.pos
 
     def draw(self, surface):
@@ -101,7 +121,6 @@ def init_environment(surface):
 
 
 pygame.init()
-vec = pygame.math.Vector2
 
 FramePerSec = pygame.time.Clock()
 displaysurface = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -127,6 +146,10 @@ while True:
             sys.exit()
 
     P1.move()
+    # If the move resulted in a collision, restore previous position
+    if pygame.sprite.spritecollideany(P1, env_clusters):
+        print("Collision!")
+        P1.undo_move()
 
     displaysurface.fill((0,100,0))
     env_clusters.draw(displaysurface)
