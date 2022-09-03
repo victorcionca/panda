@@ -2,6 +2,7 @@ import sys
 import pygame
 import random
 import math
+from pygame.math import Vector2
 from pygame.locals import *
 
 HEIGHT = 800
@@ -19,13 +20,13 @@ class Player(pygame.sprite.Sprite):
         self.image = pygame.image.load("panda.png")
         self.rect = self.image.get_rect()
         self.rect.center = (random.randint(40, WIDTH-40), 0)
-        self.pos = pygame.math.Vector2((10, 385))
-        self.prev_pos = pygame.math.Vector2(self.pos)
+        self.pos = Vector2((10, 385))
+        self.prev_pos = Vector2(self.pos)
 
     def move(self):
         pressed_keys = pygame.key.get_pressed()
         update = None
-        new_pos = pygame.math.Vector2(self.pos)
+        new_pos = Vector2(self.pos)
         if pressed_keys[K_LEFT]:
             update = True
             new_pos -= ((Player.PLAYER_MOVE_DIST, 0))
@@ -50,6 +51,59 @@ class Player(pygame.sprite.Sprite):
         print(f"Undo move {self.pos} --> {self.prev_pos}")
         self.pos = self.prev_pos
         self.rect.midbottom = self.pos
+
+    def draw(self, surface):
+        surface.blit(self.image, self.rect)
+
+class Tiger(pygame.sprite.Sprite):
+    def __init__(self, speed_divider):
+        super().__init__()
+        self.image = pygame.image.load("tiger.png")
+        self.rect = self.image.get_rect()
+        self.rect.center = (random.randint(40, WIDTH-40), 0)
+        self.width = self.rect.width
+        self.height = self.rect.height
+        self.crt_pos = 0    # Represents current index in loop
+        self.loop = list()
+        self.speed_divider = speed_divider
+        self.speed_idx = 0
+
+    def deploy(self, obstacles, loop_radius):
+        """
+        The tiger moves in a loop on the map.
+        We have to compute the loop when the tiger is instantiated on the
+        environment.
+        """
+        # Select an initial position
+        self.start_pos = Vector2((random.randint(self.width, WIDTH-self.width),
+                                random.randint(self.height, HEIGHT-self.height)))
+        # The loop is a circle where the initial position is the W-most point
+        # TODO: ensure that the loop is entirely on the board
+        # The tiger will move on the loop horizontally at width,height resolution
+        x = -loop_radius
+        delta_x = self.width
+        while x < loop_radius:
+            print(f"x={x}")
+            y = math.sqrt(loop_radius**2 - x**2)
+            print(f"y={y}")
+            self.loop.append(Vector2((x, y)))
+            x += delta_x
+        x = loop_radius
+        while x > -loop_radius:
+            print(f"x={x}")
+            y = -math.sqrt(loop_radius**2 - x**2)
+            print(f"y={y}")
+            self.loop.append(Vector2((x, y)))
+            x -= delta_x
+
+    def move(self):
+        self.speed_idx += 1
+        if self.speed_idx < self.speed_divider: return
+        self.speed_idx = 0
+        next_pos = self.loop[self.crt_pos]
+        self.rect.midbottom = self.start_pos + next_pos
+        self.crt_pos  = (self.crt_pos+1)%len(self.loop)
+        print(f"Tiger pos: {self.crt_pos} --> {self.loop[self.crt_pos]}")
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
@@ -128,14 +182,18 @@ pygame.display.set_caption("Game")
 
 PT1 = Platform()
 P1 = Player()
+tiger = Tiger(5)
 
 all_sprites = pygame.sprite.Group()
-all_sprites.add(PT1, P1)
+all_sprites.add(PT1, P1, tiger)
 #all_sprites.add(P1)
 
 # Game loop
 env_clusters = pygame.sprite.RenderUpdates()
 env_clusters.add(*init_environment(displaysurface))
+
+# Deploy the tiger
+tiger.deploy(env_clusters, 200)
 
 displaysurface.fill((0,100,0))
 env_clusters.draw(displaysurface)
@@ -145,11 +203,19 @@ while True:
             pygame.quit()
             sys.exit()
 
+        if event.type == KEYDOWN:
+            pressed_keys = pygame.key.get_pressed()
+            if pressed_keys[K_q]:
+                pygame.quit()
+                sys.exit()
+
     P1.move()
     # If the move resulted in a collision, restore previous position
     if pygame.sprite.spritecollideany(P1, env_clusters):
         print("Collision!")
         P1.undo_move()
+
+    tiger.move()
 
     displaysurface.fill((0,100,0))
     env_clusters.draw(displaysurface)
